@@ -2,7 +2,7 @@ from io import StringIO
 
 from rich.console import Console
 
-from flair.renderer import render_showcase
+from flair.renderer import modules_for, render_showcase
 from flair.system import SystemInfo
 
 
@@ -15,6 +15,7 @@ def sample_info() -> SystemInfo:
         kernel="test-kernel",
         architecture="x86_64",
         hostname="test-host",
+        host_model="Test workstation",
         username="tester",
         uptime_seconds=3600,
         desktop="Desktop",
@@ -60,3 +61,37 @@ def test_display_settings_hide_selected_hardware_rows() -> None:
     rendered = output.getvalue()
     assert "CPU" not in rendered
     assert "Test GPU" not in rendered
+
+
+def test_neofetch_and_screenfetch_presets_are_available() -> None:
+    assert "host" in modules_for("neofetch")
+    assert "de" in modules_for("screenfetch")
+    assert modules_for("minimal") == ["title", "os", "cpu", "memory", "disk", "uptime"]
+
+
+def test_custom_module_order_and_separator() -> None:
+    output = StringIO()
+    render_showcase(
+        sample_info(),
+        Console(file=output, width=120),
+        show_logo=False,
+        modules=["title", "os", "cpu"],
+        separator=" : ",
+    )
+    rendered = output.getvalue()
+    assert "Example Linux" in rendered
+    assert " : Test CPU @2.4GHz" in rendered
+    assert "test-kernel" not in rendered
+
+
+def test_custom_module_order_is_preserved() -> None:
+    output = StringIO()
+    render_showcase(
+        sample_info(),
+        Console(file=output, width=120),
+        show_logo=False,
+        modules=["os", "title", "separator", "kernel"],
+    )
+    rendered = output.getvalue()
+    assert rendered.index("Example Linux") < rendered.index("tester@test-host")
+    assert rendered.index("tester@test-host") < rendered.index("────────") < rendered.index("test-kernel")

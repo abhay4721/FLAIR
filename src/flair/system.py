@@ -34,6 +34,7 @@ class SystemInfo:
     kernel: str
     architecture: str
     hostname: str
+    host_model: str
     username: str
     uptime_seconds: int
     desktop: str
@@ -236,6 +237,24 @@ def _cpu_name() -> str:
     return "Unknown"
 
 
+def _host_model() -> str:
+    """Return the machine model when the platform exposes one."""
+    system = platform.system()
+    if system == "Darwin":
+        return _run(["sysctl", "-n", "hw.model"]) or "Unknown"
+    if system == "Windows":
+        model = _run(["powershell", "-NoProfile", "-Command", "(Get-CimInstance Win32_ComputerSystem).Model"])
+        return model or "Unknown"
+    for candidate in (Path("/sys/class/dmi/id/product_name"), Path("/proc/device-tree/model")):
+        try:
+            model = candidate.read_text(encoding="utf-8", errors="replace").replace("\x00", "").strip()
+            if model:
+                return model
+        except OSError:
+            continue
+    return "Unknown"
+
+
 def collect_system_info() -> SystemInfo:
     """Collect a snapshot of the current machine; unavailable details stay explicit."""
     distribution, version = _os_release()
@@ -315,6 +334,7 @@ def collect_system_info() -> SystemInfo:
         kernel=platform.release(),
         architecture=platform.machine() or "Unknown",
         hostname=socket.gethostname(),
+        host_model=_host_model(),
         username=os.environ.get("USER") or os.environ.get("USERNAME") or username,
         uptime_seconds=uptime,
         desktop=desktop,

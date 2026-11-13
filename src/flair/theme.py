@@ -6,7 +6,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-from flair.config import config_dir
+from flair.config import config_dir, config_path, write_root_choice
 
 try:
     import tomllib
@@ -74,16 +74,5 @@ def load_theme(name: str) -> dict[str, str]:
 def save_theme_choice(name: str, config_file: Path | None = None) -> Path:
     """Select a known theme while preserving the rest of the TOML file."""
     load_theme(name)
-    from flair.config import DEFAULT_TOML, config_path
-
     path = config_file or config_path()
-    if not path.exists():
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(DEFAULT_TOML, encoding="utf-8")
-    source = path.read_text(encoding="utf-8")
-    if re.search(r"(?m)^theme\s*=", source):
-        source = re.sub(r'(?m)^theme\s*=.*$', f'theme = "{name}"', source, count=1)
-    else:
-        source = f'theme = "{name}"\n' + source
-    path.write_text(source, encoding="utf-8")
-    return path
+    return write_root_choice(path, "theme", name.casefold())

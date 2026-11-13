@@ -1,4 +1,6 @@
-"""Fastfetch-inspired terminal presentation for the system snapshot."""
+"""Configurable fetch-style terminal output."""
+
+from pathlib import Path
 
 from rich.console import Console, Group
 from rich.table import Table
@@ -8,54 +10,120 @@ from flair.art import get_art
 from flair.system import SystemInfo, format_bytes, format_uptime
 from flair.theme import load_theme
 
+STYLE_MODULES: dict[str, list[str]] = {
+    "fastfetch": ["title", "separator", "os", "os_age", "kernel", "packages", "shell", "wm", "cpu", "gpu", "screen", "memory", "disk", "uptime", "colors"],
+    "neofetch": ["title", "separator", "os", "host", "kernel", "uptime", "packages", "shell", "de", "wm", "screen", "cpu", "gpu", "memory", "disk", "colors"],
+    "screenfetch": ["title", "separator", "os", "kernel", "uptime", "packages", "shell", "de", "screen", "cpu", "gpu", "memory", "disk", "colors"],
+    "minimal": ["title", "os", "cpu", "memory", "disk", "uptime"],
+}
+
+MODULE_LABELS: dict[str, tuple[str, str]] = {
+    "os": ("󰣇 OS", "primary"),
+    "os_age": (" OS Age", "primary"),
+    "kernel": ("󰌽 Kernel", "secondary"),
+    "packages": ("󰏖 Packages", "accent"),
+    "host": ("󰌢 Host", "primary"),
+    "uptime": ("󰔚 Uptime", "warning"),
+    "shell": (" Shell", "success"),
+    "terminal": (" Terminal", "success"),
+    "wm": (" WM", "wm"),
+    "de": ("󰧨 DE", "wm"),
+    "display_server": ("󰍹 Display", "screen"),
+    "architecture": ("󰻠 Arch", "secondary"),
+    "cpu": (" CPU", "cpu"),
+    "cores": ("󰘚 Cores", "cpu"),
+    "frequency": ("󰓅 Frequency", "cpu"),
+    "gpu": ("󰢮 GPU 0", "gpu"),
+    "gpu_driver": ("󰍹 Driver", "gpu"),
+    "screen": ("󰍹 Screen", "screen"),
+    "memory": (" Memory", "memory"),
+    "swap": ("󰓡 Swap", "memory"),
+    "disk": ("󰋊 Disk 1", "disk"),
+}
+
+
+def module_names() -> list[str]:
+    """Return the module names accepted by config and CLI overrides."""
+    return ["title", "separator", *MODULE_LABELS, "colors"]
+
+
+def modules_for(style: str, configured: list[str] | None = None) -> list[str]:
+    """Choose a fetch layout and validate a configured module list."""
+    if style not in STYLE_MODULES:
+        raise ValueError(f"Unknown fetch style '{style}'")
+    if configured is not None:
+        invalid = [item for item in configured if item not in module_names()]
+        if invalid:
+            raise ValueError("Unknown module(s): " + ", ".join(invalid))
+        return list(configured)
+    return list(STYLE_MODULES[style])
+
+
+def _module_value(name: str, info: SystemInfo) -> str:
+    values = {
+        "os": info.distribution,
+        "os_age": info.os_age,
+        "kernel": info.kernel,
+        "packages": info.packages,
+        "host": info.host_model if info.host_model != "Unknown" else info.hostname,
+        "uptime": format_uptime(info.uptime_seconds),
+        "shell": info.shell,
+        "terminal": info.terminal,
+        "wm": info.window_manager,
+        "de": info.desktop,
+        "display_server": info.display_server,
+        "architecture": info.architecture,
+        "cpu": info.cpu,
+        "cores": f"{info.physical_cores or '?'} physical / {info.logical_threads or '?'} logical",
+        "frequency": f"{info.cpu_frequency_mhz:.0f} MHz" if info.cpu_frequency_mhz else "Unavailable",
+        "gpu": info.gpu,
+        "gpu_driver": info.gpu_driver,
+        "screen": info.resolution,
+        "memory": f"{format_bytes(info.memory_used)} / {format_bytes(info.memory_total)} ({info.memory_percent:.0f}%)" if info.memory_total else "Unavailable",
+        "swap": f"{format_bytes(info.swap_used)} / {format_bytes(info.swap_total)}" if info.swap_total else "Unavailable",
+        "disk": f"{format_bytes(info.disk_used)} / {format_bytes(info.disk_total)} ({info.disk_percent:.0f}%)" if info.disk_total else "Unavailable",
+    }
+    if name == "cpu" and info.cpu_frequency_mhz:
+        return f"{info.cpu} @{info.cpu_frequency_mhz / 1000:.1f}GHz"
+    return values[name]
+
+
 def _swatches() -> Text:
     return Text.assemble(
-        ("  ", "white"),
-        ("󰮯 ", "#FFE156"),
-        (" ", "#45C9E5"),
-        ("󰊠 ", "#FF6384"),
-        ("󰊠 ", "#4ADE80"),
-        ("󰊠 ", "#38BDF8"),
-        ("󰊠 ", "#C084FC"),
-        ("󰊠", "white"),
+        ("  ", "white"), ("󰮯 ", "#FFE156"), (" ", "#45C9E5"),
+        ("󰊠 ", "#FF6384"), ("󰊠 ", "#4ADE80"), ("󰊠 ", "#38BDF8"), ("󰊠 ", "#C084FC"), ("󰊠", "white"),
     )
 
 
-def _value_table(info: SystemInfo, colors: dict[str, str], display: dict[str, bool]) -> Table:
+def _module_table(key_width: int) -> Table:
     rows = Table.grid(padding=(0, 0))
-    rows.add_column(width=14, no_wrap=True)
+    rows.add_column(width=key_width, no_wrap=True)
     rows.add_column(overflow="fold")
-
-    def add(label: str, color: str, value: str) -> None:
-        rows.add_row(Text(label, style=color), Text("  " + value))
-
-    add(" 󰣇 OS", colors["primary"], info.distribution)
-    add("  OS Age", colors["primary"], info.os_age)
-    add(" 󰌽 Kernel", colors["secondary"], info.kernel)
-    add(" 󰏖 Packages", colors["accent"], info.packages)
-    add("  Shell", colors["success"], info.shell)
-    add("  WM", colors["wm"], info.window_manager)
-    if display.get("show_cpu", True):
-        cpu = info.cpu
-        if info.cpu_frequency_mhz:
-            cpu += f" @{info.cpu_frequency_mhz / 1000:.1f}GHz"
-        add("  CPU", colors["cpu"], cpu)
-    if display.get("show_gpu", True):
-        add(" 󰢮 GPU 0", colors["gpu"], info.gpu)
-    add(" 󰍹 Screen", colors["screen"], info.resolution)
-    if display.get("show_memory", True):
-        memory = f"{format_bytes(info.memory_used)} / {format_bytes(info.memory_total)} ({info.memory_percent:.0f}%)" if info.memory_total else "Unavailable"
-        add("  Memory", colors["memory"], memory)
-    if display.get("show_disk", True):
-        disk = f"{format_bytes(info.disk_used)} / {format_bytes(info.disk_total)} ({info.disk_percent:.0f}%)" if info.disk_total else "Unavailable"
-        add(" 󰋊 Disk 1", colors["disk"], disk)
-        for index, disk in enumerate(info.extra_disks, start=2):
-            add(f" 󰋊 Disk {index}", colors["disk"], f"{format_bytes(disk.used)} / {format_bytes(disk.total)} ({disk.percent:.0f}%)")
-    if display.get("show_uptime", True):
-        add(" 󰔚 Uptime", colors["warning"], format_uptime(info.uptime_seconds))
-    rows.add_row("", "")
-    rows.add_row(Text(" 󰸱 Color", style="white"), _swatches())
     return rows
+
+
+def _logo_text(name: str, path: str, colors: dict[str, str]) -> Text:
+    if path:
+        source = Path(path).expanduser()
+        if not source.is_file() or source.stat().st_size > 262144:
+            raise ValueError("Logo file must exist and be no larger than 256 KiB")
+        logo = source.read_text(encoding="utf-8").rstrip("\n")
+        if not logo.strip():
+            raise ValueError("Logo file is empty")
+    else:
+        logo = get_art(name)
+    return Text(logo, style=colors["primary"])
+
+
+def _resolve_auto_logo(info: SystemInfo) -> str:
+    label = info.distribution.casefold()
+    if "raspberry" in label or "raspbian" in label:
+        return "raspberry-pi"
+    if "pop" in label:
+        return "pop"
+    if "android" in label or "termux" in label:
+        return "termux"
+    return next((name for name in ("windows", "macos", "endeavouros", "elementary", "mint", "kali", "ubuntu", "debian", "fedora", "manjaro", "opensuse", "nixos", "gentoo", "alpine", "void", "solus", "arch") if name in label), "arch")
 
 
 def render_showcase(
@@ -65,36 +133,75 @@ def render_showcase(
     show_logo: bool = True,
     theme: str = "arch-blue",
     logo_name: str = "auto",
+    logo_path: str = "",
+    logo_padding: dict[str, int] | None = None,
     display: dict[str, bool] | None = None,
+    style: str = "fastfetch",
+    modules: list[str] | None = None,
+    separator: str = "  ",
+    key_width: int = 14,
+    layout: str = "auto",
 ) -> None:
-    """Render the machine snapshot in the supplied Fastfetch-style layout."""
+    """Render a selectable Fastfetch, Neofetch, Screenfetch or custom layout."""
     console = console or Console()
     colors = load_theme(theme)
     display = display or {}
-    if logo_name == "auto":
-        label = info.distribution.casefold()
-        if "raspberry" in label or "raspbian" in label:
-            logo_name = "raspberry-pi"
-        elif "pop" in label:
-            logo_name = "pop"
-        else:
-            logo_name = next((name for name in ("termux", "windows", "macos", "endeavouros", "elementary", "mint", "kali", "ubuntu", "debian", "fedora", "manjaro", "opensuse", "nixos", "gentoo", "alpine", "void", "solus", "arch") if name in label), "arch")
-        if "android" in label:
-            logo_name = "termux"
-    logo = get_art(logo_name) if show_logo else ""
-    title = Text.assemble(
-        (info.username, colors["error"]),
-        ("@", colors["muted"]),
-        (info.hostname, colors["title_host"]),
-    )
-    details = Group(title, Text("───────────────", style=colors["muted"]), _value_table(info, colors, display))
+    logo_padding = logo_padding or {"top": 2, "left": 2, "right": 4}
+    selected = modules_for(style, modules)
+    hidden_by_setting = {
+        "show_cpu": {"cpu", "cores", "frequency"},
+        "show_gpu": {"gpu", "gpu_driver"},
+        "show_memory": {"memory", "swap"},
+        "show_disk": {"disk"},
+        "show_uptime": {"uptime"},
+    }
+    for setting, hidden_modules in hidden_by_setting.items():
+        if not display.get(setting, True):
+            selected = [name for name in selected if name not in hidden_modules]
+
+    rows = _module_table(key_width)
+    title = Text.assemble((info.username, colors["error"]), ("@", colors["muted"]), (info.hostname, colors["title_host"]))
+    blocks: list[object] = []
+    for module in selected:
+        if module == "title":
+            if rows.row_count:
+                blocks.append(rows)
+                rows = _module_table(key_width)
+            blocks.append(title)
+            continue
+        if module == "separator":
+            if rows.row_count:
+                blocks.append(rows)
+                rows = _module_table(key_width)
+            blocks.append(Text("───────────────", style=colors["muted"]))
+            continue
+        if module == "colors":
+            rows.add_row(Text("󰸱 Color", style=colors["text"]), _swatches())
+            continue
+        label, color_key = MODULE_LABELS[module]
+        rows.add_row(Text(label, style=colors[color_key]), Text(separator + _module_value(module, info)))
+        if module == "disk":
+            for index, disk in enumerate(info.extra_disks, start=2):
+                value = f"{format_bytes(disk.used)} / {format_bytes(disk.total)} ({disk.percent:.0f}%)"
+                rows.add_row(Text(f"󰋊 Disk {index}", style=colors["disk"]), Text(separator + value))
+    if rows.row_count:
+        blocks.append(rows)
+    content = Group(*blocks)
     if show_logo:
-        logo_text = Text("\n\n" + "\n".join(f"  {line}" for line in logo.splitlines()), style=colors["primary"])
-        layout = Table.grid(padding=(0, 2), expand=False)
-        layout.add_column()
-        layout.add_column()
-        layout.add_row(logo_text, details)
-        console.print(layout)
+        raw_logo = _logo_text(logo_name if logo_name != "auto" else _resolve_auto_logo(info), logo_path, colors)
+        top = max(0, logo_padding.get("top", 0))
+        left = max(0, logo_padding.get("left", 0))
+        logo = Text("\n" * top + "\n".join(" " * left + line for line in raw_logo.plain.splitlines()), style=colors["primary"])
+        effective_layout = "side-by-side" if layout == "auto" and console.width >= 88 else "top" if layout == "auto" else layout
+        if effective_layout == "top":
+            console.print(logo)
+            console.print(content)
+        else:
+            row = Table.grid(padding=(0, max(0, logo_padding.get("right", 4) // 2)), expand=False)
+            row.add_column()
+            row.add_column()
+            row.add_row(logo, content)
+            console.print(row)
     else:
-        console.print(details)
+        console.print(content)
 

@@ -7,6 +7,8 @@ import platform
 import shlex
 import shutil
 import subprocess
+import json
+from dataclasses import asdict
 from pathlib import Path
 
 import psutil
@@ -18,9 +20,9 @@ from rich.text import Text
 from flair import __version__
 from flair.animations import intro
 from flair.art import available_art, get_art, import_art, remove_art
-from flair.config import DEFAULT_TOML, config_path, load_config
+from flair.config import DEFAULT_TOML, config_path, load_config, save_style_choice
 from flair.monitor import run_live
-from flair.renderer import render_showcase
+from flair.renderer import STYLE_MODULES, module_names, modules_for, render_showcase
 from flair.system import collect_system_info, format_bytes
 from flair.theme import list_themes, load_theme, save_theme_choice
 
@@ -28,32 +30,95 @@ console = Console()
 app = typer.Typer(help="A fast system showcase and monitor for your terminal.", no_args_is_help=False, add_completion=False)
 art_app = typer.Typer(help="Browse and manage terminal artwork.", no_args_is_help=False)
 theme_app = typer.Typer(help="Choose or preview a color theme.", no_args_is_help=False)
+style_app = typer.Typer(help="Choose a fetch layout preset.", no_args_is_help=False)
 config_app = typer.Typer(help="View and edit FLAIR configuration.", no_args_is_help=False)
 system_app = typer.Typer(help="Inspect individual system details.", no_args_is_help=False)
 
 
-def _config() -> dict:
+def _config(path: Path | None = None) -> dict:
     try:
-        return load_config()
+        return load_config(path.expanduser() if path else None)
     except ValueError as exc:
         console.print(f"[red]Configuration error:[/] {exc}")
         raise typer.Exit(code=2) from exc
 
 
-def _show_snapshot(info=None, *, no_animation: bool = True) -> None:
-    config = _config()
+def _parse_module_list(value: str | None) -> list[str]:
+    modules = [module.strip() for module in value.split(",") if module.strip()] if value else []
+    invalid = [module for module in modules if module not in module_names()]
+    if invalid:
+        raise ValueError("Unknown module(s): " + ", ".join(invalid) + ". Use --list-modules to see valid names.")
+    return modules
+
+
+def _show_snapshot(
+    info=None,
+    *,
+    no_animation: bool = True,
+    config_file: Path | None = None,
+    style: str | None = None,
+    theme: str | None = None,
+    logo: str | None = None,
+    logo_file: Path | None = None,
+    no_logo: bool = False,
+    show_modules: str | None = None,
+    hide_modules: str | None = None,
+    layout: str | None = None,
+    separator: str | None = None,
+    key_width: int | None = None,
+    output_format: str = "text",
+    color_mode: str | None = None,
+) -> None:
+    global console
+    config = _config(config_file)
     try:
+        color_mode = color_mode or config["color"]
+        if color_mode == "always":
+            console = Console(force_terminal=True, color_system="truecolor")
+        elif color_mode == "never":
+            console = Console(no_color=True)
+        else:
+            console = Console()
+        selected_style = style or config["style"]
+        configured_modules = None if style or not config["modules"] else config["modules"]
+        selected_modules = modules_for(selected_style, configured_modules)
+        additions = _parse_module_list(show_modules)
+        hidden = set(_parse_module_list(hide_modules))
+        for module in additions:
+            if module not in selected_modules:
+                selected_modules.append(module)
+        selected_modules = [module for module in selected_modules if module not in hidden]
+        selected_theme = theme or config["theme"]
+        selected_layout = layout or config["layout"]
+        selected_separator = separator if separator is not None else config["separator"]
+        selected_key_width = key_width if key_width is not None else config["key_width"]
+        if selected_layout not in {"auto", "top", "side-by-side"}:
+            raise ValueError("--layout must be auto, top, or side-by-side")
+        if len(selected_separator) > 10:
+            raise ValueError("--separator must be 10 characters or fewer")
+        if output_format not in {"text", "json"}:
+            raise ValueError("--format must be text or json")
+        if output_format == "json":
+            typer.echo(json.dumps(asdict(info or collect_system_info()), ensure_ascii=False, indent=2))
+            return
         if not no_animation:
             intro(console, enabled=config["animation"])
         render_showcase(
             info or collect_system_info(),
             console,
-            show_logo=config["show_logo"],
-            theme=config["theme"],
-            logo_name=config["logo"]["name"],
+            show_logo=config["show_logo"] and not no_logo,
+            theme=selected_theme,
+            logo_name=logo or config["logo"]["name"],
+            logo_path=str(logo_file.expanduser()) if logo_file else config["logo"]["path"],
+            logo_padding=config["logo"]["padding"],
             display=config["display"],
+            style=selected_style,
+            modules=selected_modules,
+            separator=selected_separator,
+            key_width=selected_key_width,
+            layout=selected_layout,
         )
-    except ValueError as exc:
+    except (OSError, ValueError) as exc:
         console.print(f"[red]FLAIR:[/] {exc}")
         raise typer.Exit(code=2) from exc
 
@@ -63,13 +128,51 @@ def main(
     ctx: typer.Context,
     no_animation: bool = typer.Option(False, "--no-animation", help="Skip the startup reveal."),
     version: bool = typer.Option(False, "--version", help="Print the installed version and exit.", is_eager=True),
+    config_file: Path | None = typer.Option(None, "--config", "-c", help="Read settings from this TOML file."),
+    style: str | None = typer.Option(None, "--style", help="Fetch layout: fastfetch, neofetch, screenfetch, or minimal."),
+    theme: str | None = typer.Option(None, "--theme", help="Override the configured color theme."),
+    logo: str | None = typer.Option(None, "--logo", help="Choose a built-in or imported logo."),
+    logo_file: Path | None = typer.Option(None, "--logo-file", help="Use artwork from a text file."),
+    no_logo: bool = typer.Option(False, "--no-logo", help="Hide the logo for this run."),
+    show_modules: str | None = typer.Option(None, "--show", help="Add comma-separated modules."),
+    hide_modules: str | None = typer.Option(None, "--hide", help="Hide comma-separated modules."),
+    layout: str | None = typer.Option(None, "--layout", help="Output layout: auto, side-by-side, or top."),
+    separator: str | None = typer.Option(None, "--separator", help="Text between module keys and values."),
+    key_width: int | None = typer.Option(None, min=4, max=40, help="Module key column width."),
+    output_format: str = typer.Option("text", "--format", help="Output format: text or json."),
+    json_output: bool = typer.Option(False, "--json", help="Output collected system data as JSON."),
+    list_modules: bool = typer.Option(False, "--list-modules", help="List module names and exit."),
+    color: str | None = typer.Option(None, "--color", help="Color mode: auto, always, or never."),
 ) -> None:
-    """Show a snapshot of this machine."""
+    """Show a configurable system summary."""
     if version:
         console.print(f"FLAIR {__version__}")
         raise typer.Exit()
     if ctx.invoked_subcommand is None:
-        _show_snapshot(no_animation=no_animation)
+        if list_modules:
+            for name in module_names():
+                console.print(name)
+            return
+        if color is not None:
+            if color not in {"auto", "always", "never"}:
+                console.print("[red]--color must be auto, always, or never[/]")
+                raise typer.Exit(code=2)
+        _show_snapshot(
+            no_animation=no_animation,
+            config_file=config_file,
+            style=style,
+            theme=theme,
+            logo=logo,
+            logo_file=logo_file,
+            no_logo=no_logo,
+            show_modules=show_modules,
+            hide_modules=hide_modules,
+            layout=layout,
+            separator=separator,
+            key_width=key_width,
+            output_format="json" if json_output else output_format,
+            color_mode=color,
+        )
 
 
 @app.command()
@@ -194,6 +297,32 @@ def theme_preview(name: str) -> None:
         console.print(Text(f"  {field:<12} FLAIR terminal palette", style=color))
 
 
+@style_app.callback(invoke_without_command=True)
+def style_root(ctx: typer.Context) -> None:
+    """List built-in fetch layouts."""
+    if ctx.invoked_subcommand is None:
+        style_list()
+
+
+@style_app.command("list")
+def style_list() -> None:
+    """List built-in fetch layout presets."""
+    selected = _config()["style"]
+    for name in STYLE_MODULES:
+        console.print(f"{'*' if name == selected else ' '} {name}")
+
+
+@style_app.command("set")
+def style_set(name: str) -> None:
+    """Set the default fetch layout preset."""
+    try:
+        path = save_style_choice(name)
+    except (OSError, ValueError) as exc:
+        console.print(f"[red]{exc}[/]")
+        raise typer.Exit(code=2) from exc
+    console.print(f"Style set to [bold]{name}[/] ({path})")
+
+
 @config_app.callback(invoke_without_command=True)
 def config_root(ctx: typer.Context) -> None:
     """Print the active configuration path and contents."""
@@ -282,6 +411,7 @@ def system_disk() -> None:
 
 app.add_typer(art_app, name="art")
 app.add_typer(theme_app, name="theme")
+app.add_typer(style_app, name="style")
 app.add_typer(config_app, name="config")
 app.add_typer(system_app, name="system")
 

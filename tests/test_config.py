@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from flair.config import DEFAULT_TOML, load_config
+from flair.config import DEFAULT_TOML, load_config, save_style_choice
 import flair.config as config_module
 
 
@@ -12,6 +12,8 @@ def test_config_is_created_with_defaults(tmp_path: Path) -> None:
 
     assert path.read_text() == DEFAULT_TOML
     assert config["theme"] == "arch-blue"
+    assert config["style"] == "fastfetch"
+    assert config["logo"]["padding"]["right"] == 4
     assert config["display"]["show_cpu"] is True
 
 
@@ -45,4 +47,21 @@ def test_config_path_uses_macos_application_support(monkeypatch: pytest.MonkeyPa
     monkeypatch.setattr(config_module.platform, "system", lambda: "Darwin")
     monkeypatch.delenv("XDG_CONFIG_HOME", raising=False)
     assert config_module.config_path().parts[-3:] == ("Application Support", "flair", "config.toml")
+
+
+def test_invalid_module_name_is_rejected(tmp_path: Path) -> None:
+    path = tmp_path / "config.toml"
+    path.write_text('modules = ["made-up"]\n')
+    with pytest.raises(ValueError, match="supported module"):
+        load_config(path)
+
+
+def test_saving_style_preserves_existing_settings(tmp_path: Path) -> None:
+    path = tmp_path / "config.toml"
+    path.write_text('animation = false\nseparator = " | "\n')
+    save_style_choice("neofetch", path)
+    saved = path.read_text()
+    assert 'style = "neofetch"' in saved
+    assert "animation = false" in saved
+    assert 'separator = " | "' in saved
 
