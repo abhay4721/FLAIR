@@ -4,7 +4,7 @@
 
 FLAIR is a small Linux terminal showcase for the details you usually look up in several places: the OS, desktop session, processor, graphics adapter, memory and root disk. It reads the current machine at startup, so hardware values are never baked into the output.
 
-The first release focuses on a quick system summary. Live monitoring, themes and artwork management are planned for later releases and are not available yet.
+The first release focuses on a quick system summary. Live monitoring, theme switching and artwork management are planned for later releases and are not available yet.
 
 ## What it shows
 
@@ -13,7 +13,8 @@ The first release focuses on a quick system summary. Live monitoring, themes and
 - CPU model, core and thread counts, and current frequency when available
 - GPU name and NVIDIA driver version when detectable
 - Memory, swap and root filesystem use
-- An Arch inspired logo and a short startup reveal
+- A Fastfetch inspired Arch layout, colored module labels and terminal swatches
+- Package count, estimated root filesystem age, and mounted media disks when detectable
 
 Missing details are shown as unavailable. FLAIR does not need root access; NVIDIA details use `nvidia-smi` when it is installed, while other GPU names are detected from sysfs or `lspci`.
 
@@ -66,7 +67,7 @@ show_memory = true
 show_disk = true
 ```
 
-The current release uses the animation and logo settings. Theme selection and individual display toggles are reserved for the customization phase.
+The current release uses the animation and logo settings. When `~/.config/fastfetch/arch.txt` exists, FLAIR uses that same logo file; otherwise it draws the built-in Arch logo. The displayed colors and row order follow the supplied Fastfetch setup. Theme selection and individual display toggles are reserved for the customization phase.
 
 ## Development
 

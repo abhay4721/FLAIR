@@ -1,8 +1,8 @@
-"""Terminal presentation for the static system showcase."""
+"""Fastfetch-inspired terminal presentation for the system snapshot."""
 
-from rich import box
-from rich.console import Console
-from rich.panel import Panel
+from pathlib import Path
+
+from rich.console import Console, Group
 from rich.table import Table
 from rich.text import Text
 
@@ -16,32 +16,89 @@ ARCH_LOGO = """       /\\
   /   |  |   \\
  /_-''    ''-_\\"""
 
+COLORS = {
+    "os": "#56B6FF",
+    "kernel": "#BE8CFF",
+    "packages": "#FF9E64",
+    "shell": "#66E880",
+    "wm": "#E5D142",
+    "cpu": "#45E3CD",
+    "gpu": "#E485F6",
+    "screen": "#7A9CFF",
+    "memory": "#FF75A0",
+    "disk": "#94F0AD",
+    "uptime": "#F7C77E",
+}
+
+
+def _logo() -> str:
+    """Use the Fastfetch logo file when present, with a built-in fallback."""
+    source = Path.home() / ".config" / "fastfetch" / "arch.txt"
+    try:
+        return source.read_text(encoding="utf-8").rstrip("\n")
+    except OSError:
+        return ARCH_LOGO
+
+
+def _swatches() -> Text:
+    return Text.assemble(
+        ("  ", "white"),
+        ("󰮯 ", "#FFE156"),
+        (" ", "#45C9E5"),
+        ("󰊠 ", "#FF6384"),
+        ("󰊠 ", "#4ADE80"),
+        ("󰊠 ", "#38BDF8"),
+        ("󰊠 ", "#C084FC"),
+        ("󰊠", "white"),
+    )
+
+
+def _value_table(info: SystemInfo) -> Table:
+    rows = Table.grid(padding=(0, 0))
+    rows.add_column(width=14, no_wrap=True)
+    rows.add_column(overflow="fold")
+
+    def add(label: str, color: str, value: str) -> None:
+        rows.add_row(Text(label, style=color), Text("  " + value))
+
+    add(" 󰣇 OS", COLORS["os"], info.distribution)
+    add("  OS Age", COLORS["os"], info.os_age)
+    add(" 󰌽 Kernel", COLORS["kernel"], info.kernel)
+    add(" 󰏖 Packages", COLORS["packages"], info.packages)
+    add("  Shell", COLORS["shell"], info.shell)
+    add("  WM", COLORS["wm"], info.window_manager)
+    cpu = info.cpu
+    if info.cpu_frequency_mhz:
+        cpu += f" @{info.cpu_frequency_mhz / 1000:.1f}GHz"
+    add("  CPU", COLORS["cpu"], cpu)
+    add(" 󰢮 GPU 0", COLORS["gpu"], info.gpu)
+    add(" 󰍹 Screen", COLORS["screen"], info.resolution)
+    add("  Memory", COLORS["memory"], f"{format_bytes(info.memory_used)} / {format_bytes(info.memory_total)} ({info.memory_percent:.0f}%)")
+    add(" 󰋊 Disk 1", COLORS["disk"], f"{format_bytes(info.disk_used)} / {format_bytes(info.disk_total)} ({info.disk_percent:.0f}%)")
+    for index, disk in enumerate(info.extra_disks, start=2):
+        add(f" 󰋊 Disk {index}", COLORS["disk"], f"{format_bytes(disk.used)} / {format_bytes(disk.total)} ({disk.percent:.0f}%)")
+    add(" 󰔚 Uptime", COLORS["uptime"], format_uptime(info.uptime_seconds))
+    rows.add_row("", "")
+    rows.add_row(Text(" 󰸱 Color", style="white"), _swatches())
+    return rows
+
 
 def render_showcase(info: SystemInfo, console: Console | None = None, *, show_logo: bool = True) -> None:
-    """Render the machine snapshot in a compact panel."""
+    """Render the machine snapshot in the supplied Fastfetch-style layout."""
     console = console or Console()
-    details = Table.grid(padding=(0, 1))
-    details.add_column(style="bold #1793D1", no_wrap=True)
-    details.add_column(style="#E6EDF3", overflow="fold")
-    details.add_row("OS", f"{info.distribution} {info.os_version} · {info.architecture}")
-    details.add_row("Kernel", info.kernel)
-    details.add_row("Host", f"{info.username}@{info.hostname}")
-    details.add_row("Uptime", format_uptime(info.uptime_seconds))
-    details.add_row("Desktop", f"{info.desktop} · {info.window_manager} · {info.display_server}")
-    details.add_row("Shell", f"{info.shell} · {info.terminal}")
-    details.add_row("Display", info.resolution)
-    details.add_row("CPU", f"{info.cpu} · {info.physical_cores or '?'} cores / {info.logical_threads or '?'} threads")
-    if info.cpu_frequency_mhz:
-        details.add_row("Frequency", f"{info.cpu_frequency_mhz:.0f} MHz")
-    details.add_row("GPU", f"{info.gpu}" + (f" · driver {info.gpu_driver}" if info.gpu_driver != "Unknown" else ""))
-    details.add_row("Memory", f"{format_bytes(info.memory_used)} / {format_bytes(info.memory_total)} ({info.memory_percent:.0f}%)")
-    details.add_row("Swap", f"{format_bytes(info.swap_used)} / {format_bytes(info.swap_total)}")
-    details.add_row("Root disk", f"{format_bytes(info.disk_used)} / {format_bytes(info.disk_total)} ({info.disk_percent:.0f}%)")
-    content = Table.grid(expand=True, padding=(0, 2))
+    title = Text.assemble(
+        (info.username, "#FF8282"),
+        ("@", "#666666"),
+        (info.hostname, "#FFACF3"),
+    )
+    details = Group(title, Text("───────────────", style="#666666"), _value_table(info))
     if show_logo:
-        content.add_column(width=20, justify="center")
-    content.add_column(ratio=1)
-    content.add_row(Text(ARCH_LOGO, style="#56B4E9"), details) if show_logo else content.add_row(details)
-    title = Text(" FLAIR ", style="bold white on #1793D1")
-    console.print(Panel(content, title=title, subtitle="Your machine. Your style. Your terminal.", border_style="#1793D1", box=box.ROUNDED, padding=(1, 2)))
+        logo = Text("\n\n" + "\n".join(f"  {line}" for line in _logo().splitlines()), style="#56B6FF")
+        layout = Table.grid(padding=(0, 2), expand=False)
+        layout.add_column()
+        layout.add_column()
+        layout.add_row(logo, details)
+        console.print(layout)
+    else:
+        console.print(details)
 
