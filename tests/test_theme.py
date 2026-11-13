@@ -21,9 +21,9 @@ def test_invalid_custom_theme_is_rejected(tmp_path: Path, monkeypatch: pytest.Mo
 
 def test_theme_selection_preserves_other_config(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     config_file = tmp_path / "config.toml"
-    config_file.write_text('animation = false\n\n[display]\nshow_cpu = false\n')
+    config_file.write_text('startup_status = false\n\n[display]\nshow_cpu = false\n')
     path = theme.save_theme_choice("nord", config_file)
     contents = path.read_text()
     assert 'theme = "nord"' in contents
-    assert "animation = false" in contents
+    assert "startup_status = false" in contents
     assert "show_cpu = false" in contents

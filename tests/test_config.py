@@ -12,7 +12,7 @@ def test_config_is_created_with_defaults(tmp_path: Path) -> None:
 
     assert path.read_text() == DEFAULT_TOML
     assert config["theme"] == "arch-blue"
-    assert config["style"] == "fastfetch"
+    assert config["style"] == "default"
     assert config["logo"]["padding"]["right"] == 4
     assert config["display"]["show_cpu"] is True
 
@@ -30,9 +30,9 @@ def test_existing_config_is_preserved(tmp_path: Path) -> None:
 
 def test_invalid_value_has_useful_error(tmp_path: Path) -> None:
     path = tmp_path / "config.toml"
-    path.write_text("animation = 5\n")
+    path.write_text("startup_status = 5\n")
 
-    with pytest.raises(ValueError, match="animation"):
+    with pytest.raises(ValueError, match="startup_status"):
         load_config(path)
 
 
@@ -58,10 +58,10 @@ def test_invalid_module_name_is_rejected(tmp_path: Path) -> None:
 
 def test_saving_style_preserves_existing_settings(tmp_path: Path) -> None:
     path = tmp_path / "config.toml"
-    path.write_text('animation = false\nseparator = " | "\n')
-    save_style_choice("neofetch", path)
+    path.write_text('startup_status = false\nseparator = " | "\n')
+    save_style_choice("detailed", path)
     saved = path.read_text()
-    assert 'style = "neofetch"' in saved
-    assert "animation = false" in saved
+    assert 'style = "detailed"' in saved
+    assert "startup_status = false" in saved
     assert 'separator = " | "' in saved
 

@@ -15,8 +15,8 @@ except ModuleNotFoundError:  # Python 3.10
 
 DEFAULT_CONFIG: dict[str, Any] = {
     "theme": "arch-blue",
-    "style": "fastfetch",
-    "animation": True,
+    "style": "default",
+    "startup_status": True,
     "show_logo": True,
     "refresh_interval": 1.0,
     "separator": "  ",
@@ -29,8 +29,8 @@ DEFAULT_CONFIG: dict[str, Any] = {
 }
 
 DEFAULT_TOML = '''theme = "arch-blue"
-style = "fastfetch"
-animation = true
+style = "default"
+startup_status = true
 show_logo = true
 refresh_interval = 1.0
 separator = "  "
@@ -105,8 +105,8 @@ def write_root_choice(path: Path, key: str, value: str) -> Path:
 
 def save_style_choice(style: str, path: Path | None = None) -> Path:
     """Persist a built-in output preset without discarding other settings."""
-    if style not in {"fastfetch", "neofetch", "screenfetch", "minimal"}:
-        raise ValueError("Style must be fastfetch, neofetch, screenfetch, or minimal")
+    if style not in {"default", "detailed", "classic", "minimal"}:
+        raise ValueError("Style must be default, detailed, classic, or minimal")
     return write_root_choice(path or config_path(), "style", style)
 
 
@@ -131,8 +131,8 @@ def load_config(path: Path | None = None) -> dict[str, Any]:
     for key in ("theme", "style", "layout", "color", "separator"):
         if not isinstance(values.get(key, DEFAULT_CONFIG.get(key, "")), str):
             raise ValueError(f"'{key}' must be a string")
-    if values.get("style", "fastfetch") not in {"fastfetch", "neofetch", "screenfetch", "minimal"}:
-        raise ValueError("'style' must be fastfetch, neofetch, screenfetch, or minimal")
+    if values.get("style", "default") not in {"default", "detailed", "classic", "minimal"}:
+        raise ValueError("'style' must be default, detailed, classic, or minimal")
     if values.get("layout", "auto") not in {"auto", "side-by-side", "top"}:
         raise ValueError("'layout' must be auto, side-by-side, or top")
     if values.get("color", "auto") not in {"auto", "always", "never"}:
@@ -150,7 +150,7 @@ def load_config(path: Path | None = None) -> dict[str, Any]:
     }
     if not isinstance(modules, list) or any(not isinstance(module, str) or module not in allowed_modules for module in modules):
         raise ValueError("'modules' must be a list of supported module names")
-    for key in ("animation", "show_logo"):
+    for key in ("startup_status", "show_logo"):
         if not isinstance(values.get(key, DEFAULT_CONFIG[key]), bool):
             raise ValueError(f"'{key}' must be true or false")
     display = values.get("display", {})

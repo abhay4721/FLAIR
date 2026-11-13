@@ -2,7 +2,7 @@
 
 **Your machine. Your style. Your terminal.**
 
-FLAIR is a configurable system fetcher and live monitor. Its default layout follows the Fastfetch-inspired style you selected, and it also includes Neofetch-like, Screenfetch-like, and compact presets. Hardware values come from the running machine; unavailable fields are left unknown instead of guessed.
+FLAIR is a configurable system summary and live monitor. Choose from default, detailed, classic, and minimal layouts, then adjust the modules, colors, artwork, and spacing to suit your terminal. Hardware values come from the running machine; unavailable fields are left unknown instead of guessed.
 
 ## Platforms
 
@@ -70,12 +70,12 @@ The editable install for development is `python -m pip install -e '.[dev]'`. To 
 
 ```text
 flair                         Show the system summary
-flair --no-animation          Skip the startup reveal
-flair --style neofetch         Use the Neofetch-like module order
-flair --style screenfetch      Use the Screenfetch-like module order
+flair --quiet-start            Hide the brief startup status
+flair --style detailed         Use the detailed module order
+flair --style classic          Use the classic module order
 flair --style minimal          Use the compact module order
 flair style list               List layout presets
-flair style set neofetch       Save a preset as the default
+flair style set detailed       Save a preset as the default
 flair --show architecture,host Add modules to the current preset
 flair --hide packages,gpu      Hide modules for this run
 flair --logo ubuntu            Choose a built-in logo
@@ -119,7 +119,7 @@ The live view exits cleanly with Ctrl+C. NVIDIA utilization, temperature and mem
 
 The built-in collection includes Arch, EndeavourOS, Ubuntu, Linux Mint, Pop!_OS, Debian, Kali, Fedora, Manjaro, openSUSE, NixOS, Gentoo, Alpine, Void, Solus, elementary OS, Raspberry Pi OS, Termux, Windows and macOS logos. FLAIR picks a logo based on the detected operating system by default. Set a different default in the config file with `logo.name = "fedora"`.
 
-Imported text files are saved under the platform's FLAIR config folder in `art/`. Existing artwork is never overwritten by `art import`. For Arch, an existing `~/.config/fastfetch/arch.txt` is used as the default logo unless a FLAIR custom logo named `arch` is present.
+Imported text files are saved under the platform's FLAIR config folder in `art/`. Existing artwork is never overwritten by `art import`.
 
 ## Themes and configuration
 
@@ -127,8 +127,8 @@ FLAIR creates a per-user `config.toml` on first launch. It uses `$XDG_CONFIG_HOM
 
 ```toml
 theme = "arch-blue"
-style = "fastfetch"
-animation = true
+style = "default"
+startup_status = true
 show_logo = true
 refresh_interval = 1.0
 separator = "  "
@@ -157,7 +157,9 @@ show_uptime = true
 
 `modules` can hold an ordered list such as `modules = ["title", "separator", "os", "kernel", "cpu", "memory", "disk"]`. An empty list uses the selected `style` preset. Per-run `--show` and `--hide` options layer on top without editing the file. `layout = "auto"` switches to a top-down logo on narrow terminals. `logo.path` can point to a text logo; `logo.name` selects a built-in or imported logo when no file is set.
 
-Available modules are `title`, `separator`, `os`, `os_age`, `kernel`, `packages`, `host`, `uptime`, `shell`, `terminal`, `wm`, `de`, `display_server`, `architecture`, `cpu`, `cores`, `frequency`, `gpu`, `gpu_driver`, `screen`, `memory`, `swap`, `disk`, and `colors`. For example: `flair --style neofetch --show architecture,terminal --hide colors`.
+Available modules are `title`, `separator`, `os`, `os_age`, `kernel`, `packages`, `host`, `uptime`, `shell`, `terminal`, `wm`, `de`, `display_server`, `architecture`, `cpu`, `cores`, `frequency`, `gpu`, `gpu_driver`, `screen`, `memory`, `swap`, `disk`, and `colors`. For example: `flair --style detailed --show architecture,terminal --hide colors`.
+
+Configuration can also control `startup_status`, refresh interval, terminal color mode, key width, key/value separator, logo visibility, built-in or custom artwork, logo padding, per-hardware display toggles, and an ordered module list. The `--config` option selects a separate TOML file, while `--show` and `--hide` make one-run adjustments.
 
 Built-in themes are Arch Blue, Cyberpunk, Matrix, Dracula, Minimal Dark and Nord. To add a theme, create `themes/<name>.toml` inside the FLAIR config folder:
 

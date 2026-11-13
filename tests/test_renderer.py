@@ -63,9 +63,9 @@ def test_display_settings_hide_selected_hardware_rows() -> None:
     assert "Test GPU" not in rendered
 
 
-def test_neofetch_and_screenfetch_presets_are_available() -> None:
-    assert "host" in modules_for("neofetch")
-    assert "de" in modules_for("screenfetch")
+def test_detailed_and_classic_presets_are_available() -> None:
+    assert "host" in modules_for("detailed")
+    assert "de" in modules_for("classic")
     assert modules_for("minimal") == ["title", "os", "cpu", "memory", "disk", "uptime"]
 
 

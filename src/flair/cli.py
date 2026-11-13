@@ -18,7 +18,6 @@ from rich.table import Table
 from rich.text import Text
 
 from flair import __version__
-from flair.animations import intro
 from flair.art import available_art, get_art, import_art, remove_art
 from flair.config import DEFAULT_TOML, config_path, load_config, save_style_choice
 from flair.monitor import run_live
@@ -54,7 +53,7 @@ def _parse_module_list(value: str | None) -> list[str]:
 def _show_snapshot(
     info=None,
     *,
-    no_animation: bool = True,
+    quiet_start: bool = False,
     config_file: Path | None = None,
     style: str | None = None,
     theme: str | None = None,
@@ -101,10 +100,14 @@ def _show_snapshot(
         if output_format == "json":
             typer.echo(json.dumps(asdict(info or collect_system_info()), ensure_ascii=False, indent=2))
             return
-        if not no_animation:
-            intro(console, enabled=config["animation"])
+        if info is None:
+            if config["startup_status"] and not quiet_start and console.is_terminal:
+                with console.status("Reading system information…", spinner="dots", transient=True):
+                    info = collect_system_info()
+            else:
+                info = collect_system_info()
         render_showcase(
-            info or collect_system_info(),
+            info,
             console,
             show_logo=config["show_logo"] and not no_logo,
             theme=selected_theme,
@@ -126,10 +129,10 @@ def _show_snapshot(
 @app.callback(invoke_without_command=True)
 def main(
     ctx: typer.Context,
-    no_animation: bool = typer.Option(False, "--no-animation", help="Skip the startup reveal."),
+    quiet_start: bool = typer.Option(False, "--quiet-start", help="Hide the brief startup status."),
     version: bool = typer.Option(False, "--version", help="Print the installed version and exit.", is_eager=True),
     config_file: Path | None = typer.Option(None, "--config", "-c", help="Read settings from this TOML file."),
-    style: str | None = typer.Option(None, "--style", help="Fetch layout: fastfetch, neofetch, screenfetch, or minimal."),
+    style: str | None = typer.Option(None, "--style", help="Layout preset: default, detailed, classic, or minimal."),
     theme: str | None = typer.Option(None, "--theme", help="Override the configured color theme."),
     logo: str | None = typer.Option(None, "--logo", help="Choose a built-in or imported logo."),
     logo_file: Path | None = typer.Option(None, "--logo-file", help="Use artwork from a text file."),
@@ -158,7 +161,7 @@ def main(
                 console.print("[red]--color must be auto, always, or never[/]")
                 raise typer.Exit(code=2)
         _show_snapshot(
-            no_animation=no_animation,
+            quiet_start=quiet_start,
             config_file=config_file,
             style=style,
             theme=theme,

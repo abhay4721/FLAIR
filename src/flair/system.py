@@ -180,7 +180,7 @@ def _resolution() -> str:
 
 
 def _os_age() -> str:
-    """Estimate the root filesystem age, matching Fastfetch's birth/mtime fallback."""
+    """Estimate the root filesystem age using birth time or modification time."""
     if platform.system() != "Linux":
         return "Unknown"
     raw = _run(["stat", "-c", "%w", "/"])

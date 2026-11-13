@@ -11,9 +11,9 @@ from flair.system import SystemInfo, format_bytes, format_uptime
 from flair.theme import load_theme
 
 STYLE_MODULES: dict[str, list[str]] = {
-    "fastfetch": ["title", "separator", "os", "os_age", "kernel", "packages", "shell", "wm", "cpu", "gpu", "screen", "memory", "disk", "uptime", "colors"],
-    "neofetch": ["title", "separator", "os", "host", "kernel", "uptime", "packages", "shell", "de", "wm", "screen", "cpu", "gpu", "memory", "disk", "colors"],
-    "screenfetch": ["title", "separator", "os", "kernel", "uptime", "packages", "shell", "de", "screen", "cpu", "gpu", "memory", "disk", "colors"],
+    "default": ["title", "separator", "os", "os_age", "kernel", "packages", "shell", "wm", "cpu", "gpu", "screen", "memory", "disk", "uptime", "colors"],
+    "detailed": ["title", "separator", "os", "host", "kernel", "uptime", "packages", "shell", "de", "wm", "screen", "cpu", "gpu", "memory", "disk", "colors"],
+    "classic": ["title", "separator", "os", "kernel", "uptime", "packages", "shell", "de", "screen", "cpu", "gpu", "memory", "disk", "colors"],
     "minimal": ["title", "os", "cpu", "memory", "disk", "uptime"],
 }
 
@@ -136,13 +136,13 @@ def render_showcase(
     logo_path: str = "",
     logo_padding: dict[str, int] | None = None,
     display: dict[str, bool] | None = None,
-    style: str = "fastfetch",
+    style: str = "default",
     modules: list[str] | None = None,
     separator: str = "  ",
     key_width: int = 14,
     layout: str = "auto",
 ) -> None:
-    """Render a selectable Fastfetch, Neofetch, Screenfetch or custom layout."""
+    """Render a selected FLAIR layout with optional custom modules."""
     console = console or Console()
     colors = load_theme(theme)
     display = display or {}

@@ -148,12 +148,6 @@ def get_art(name: str) -> str:
         return custom.read_text(encoding="utf-8").rstrip("\n")
     if safe_name not in ART:
         raise ValueError(f"Unknown logo '{name}'. Use 'flair art list' to see available logos.")
-    if safe_name == "arch":
-        fastfetch_logo = Path.home() / ".config" / "fastfetch" / "arch.txt"
-        try:
-            return fastfetch_logo.read_text(encoding="utf-8").rstrip("\n")
-        except OSError:
-            pass
     return ART[safe_name]
 
 
