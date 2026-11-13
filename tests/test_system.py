@@ -1,5 +1,6 @@
 from unittest.mock import patch
 
+import flair.system as system
 from flair.system import _resolution, format_bytes, format_uptime
 
 
@@ -36,4 +37,24 @@ def test_xrandr_resolution_includes_active_refresh_rate() -> None:
 
     with patch("flair.system._run", side_effect=fake_run):
         assert _resolution() == "1920x1080 @ 60.00Hz"
+
+
+def test_windows_platform_name(monkeypatch) -> None:
+    monkeypatch.setattr(system.platform, "system", lambda: "Windows")
+    monkeypatch.setattr(system.platform, "win32_ver", lambda: ("11", "", "build"))
+    monkeypatch.setattr(system, "_run", lambda command: "")
+    assert system._os_release() == ("Windows 11", "build")
+
+
+def test_macos_platform_name(monkeypatch) -> None:
+    monkeypatch.setattr(system.platform, "system", lambda: "Darwin")
+    monkeypatch.setattr(system.platform, "mac_ver", lambda: ("15.2", ("", "", ""), "arm64"))
+    assert system._os_release() == ("macOS 15.2", "15.2")
+
+
+def test_termux_platform_name(monkeypatch) -> None:
+    monkeypatch.setattr(system.platform, "system", lambda: "Linux")
+    monkeypatch.setenv("TERMUX_VERSION", "0.118")
+    monkeypatch.setattr(system, "_run", lambda command: "14" if command[0] == "getprop" else "")
+    assert system._os_release() == ("Android 14 (Termux)", "14")
 

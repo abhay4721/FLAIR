@@ -3,6 +3,7 @@ from pathlib import Path
 import pytest
 
 from flair.config import DEFAULT_TOML, load_config
+import flair.config as config_module
 
 
 def test_config_is_created_with_defaults(tmp_path: Path) -> None:
@@ -31,4 +32,17 @@ def test_invalid_value_has_useful_error(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="animation"):
         load_config(path)
+
+
+def test_config_path_uses_windows_roaming_directory(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(config_module.platform, "system", lambda: "Windows")
+    monkeypatch.setenv("APPDATA", "C:/Users/test/AppData/Roaming")
+    monkeypatch.delenv("XDG_CONFIG_HOME", raising=False)
+    assert str(config_module.config_path()).endswith("flair/config.toml")
+
+
+def test_config_path_uses_macos_application_support(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(config_module.platform, "system", lambda: "Darwin")
+    monkeypatch.delenv("XDG_CONFIG_HOME", raising=False)
+    assert config_module.config_path().parts[-3:] == ("Application Support", "flair", "config.toml")
 

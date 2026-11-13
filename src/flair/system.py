@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-import os
 import json
+import getpass
+import os
 import platform
 import shutil
 import socket
@@ -11,6 +12,7 @@ import subprocess
 import time
 from dataclasses import dataclass
 from pathlib import Path
+from types import SimpleNamespace
 
 import psutil
 
@@ -58,6 +60,17 @@ class SystemInfo:
 
 
 def _os_release() -> tuple[str, str]:
+    system = platform.system()
+    if system == "Windows":
+        version, _, build = platform.win32_ver()
+        caption = _run(["powershell", "-NoProfile", "-Command", "(Get-CimInstance Win32_OperatingSystem).Caption"])
+        return caption or f"Windows {version or platform.version()}", build or version
+    if system == "Darwin":
+        version = platform.mac_ver()[0]
+        return f"macOS {version}" if version else "macOS", version
+    if os.environ.get("TERMUX_VERSION") or Path("/data/data/com.termux/files/usr").exists():
+        android_version = _run(["getprop", "ro.build.version.release"])
+        return (f"Android {android_version} (Termux)" if android_version else "Android (Termux)"), android_version
     fields: dict[str, str] = {}
     try:
         for line in Path("/etc/os-release").read_text(encoding="utf-8").splitlines():
@@ -66,7 +79,7 @@ def _os_release() -> tuple[str, str]:
                 fields[key] = value.strip().strip('"')
     except OSError:
         pass
-    return fields.get("PRETTY_NAME", platform.system()), fields.get("VERSION_ID", "")
+    return fields.get("PRETTY_NAME", platform.platform()), fields.get("VERSION_ID", "")
 
 
 def _run(command: list[str]) -> str:
@@ -83,8 +96,23 @@ def _run(command: list[str]) -> str:
 def _gpu_details() -> tuple[str, str]:
     nvidia = _run(["nvidia-smi", "--query-gpu=name,driver_version", "--format=csv,noheader"])
     if nvidia:
-        name, _, driver = nvidia.partition(",")
+        name, _, driver = nvidia.splitlines()[0].partition(",")
         return name.strip(), driver.strip() or "NVIDIA"
+
+    if platform.system() == "Darwin":
+        details = _run(["system_profiler", "SPDisplaysDataType"])
+        for line in details.splitlines():
+            if line.strip().startswith("Chipset Model:"):
+                return line.split(":", 1)[1].strip(), ""
+    elif platform.system() == "Windows":
+        details = _run(["powershell", "-NoProfile", "-Command", "(Get-CimInstance Win32_VideoController).Name"])
+        if details:
+            return details.splitlines()[0].strip(), ""
+
+    for line in _run(["lspci", "-mm"]).splitlines():
+        if any(kind in line for kind in ('"VGA compatible controller"', '"3D controller"', '"Display controller"')):
+            fields = line.split('"')
+            return (fields[5] if len(fields) > 5 else "GPU detected"), ""
 
     for device in sorted(Path("/sys/class/drm").glob("card[0-9]/device")):
         try:
@@ -97,15 +125,25 @@ def _gpu_details() -> tuple[str, str]:
                 return (f"GPU ({vendor}, PCI {pci_id})" if pci_id else f"GPU ({vendor})"), ""
         except OSError:
             continue
-
-    for line in _run(["lspci", "-mm"]).splitlines():
-        if any(kind in line for kind in ('"VGA compatible controller"', '"3D controller"', '"Display controller"')):
-            fields = line.split('"')
-            return (fields[5] if len(fields) > 5 else "GPU detected"), ""
     return "Not detected", ""
 
 
 def _resolution() -> str:
+    if platform.system() == "Windows":
+        try:
+            import ctypes
+
+            width = ctypes.windll.user32.GetSystemMetrics(0)
+            height = ctypes.windll.user32.GetSystemMetrics(1)
+            return f"{width}x{height}" if width and height else "Unknown"
+        except (AttributeError, OSError):
+            return "Unknown"
+    if platform.system() == "Darwin":
+        details = _run(["system_profiler", "SPDisplaysDataType"])
+        for line in details.splitlines():
+            if line.strip().startswith("Resolution:"):
+                return line.split(":", 1)[1].strip()
+        return "Unknown"
     monitors = _run(["hyprctl", "monitors", "-j"])
     if monitors:
         try:
@@ -142,6 +180,8 @@ def _resolution() -> str:
 
 def _os_age() -> str:
     """Estimate the root filesystem age, matching Fastfetch's birth/mtime fallback."""
+    if platform.system() != "Linux":
+        return "Unknown"
     raw = _run(["stat", "-c", "%w", "/"])
     if not raw or raw == "-":
         raw = _run(["stat", "-c", "%y", "/"])
@@ -163,6 +203,9 @@ def _package_count() -> str:
         (["pacman", "-Qq"], "pacman"),
         (["dpkg-query", "-f", "${binary:Package}\\n", "-W"], "dpkg"),
         (["rpm", "-qa", "--qf", "%{NAME}\\n"], "rpm"),
+        (["apk", "info"], "apk"),
+        (["xbps-query", "-l"], "xbps"),
+        (["brew", "list", "--formula", "--versions"], "Homebrew"),
     )
     for command, manager in checks:
         output = _run(command)
@@ -172,41 +215,98 @@ def _package_count() -> str:
 
 
 def _cpu_name() -> str:
+    if platform.system() == "Darwin":
+        name = _run(["sysctl", "-n", "machdep.cpu.brand_string"])
+        if name:
+            return name
+    if platform.system() == "Windows":
+        name = _run(["powershell", "-NoProfile", "-Command", "(Get-CimInstance Win32_Processor | Select-Object -First 1 -ExpandProperty Name)"])
+        if name:
+            return name
+    if platform.system() == "Linux":
+        try:
+            for line in Path("/proc/cpuinfo").read_text(encoding="utf-8", errors="replace").splitlines():
+                if line.lower().startswith(("model name", "hardware")) and ":" in line:
+                    return line.split(":", 1)[1].strip()
+        except OSError:
+            pass
     name = platform.processor()
     if name:
         return name
-    try:
-        for line in Path("/proc/cpuinfo").read_text(encoding="utf-8", errors="replace").splitlines():
-            if line.lower().startswith(("model name", "hardware")) and ":" in line:
-                return line.split(":", 1)[1].strip()
-    except OSError:
-        pass
     return "Unknown"
 
 
 def collect_system_info() -> SystemInfo:
     """Collect a snapshot of the current machine; unavailable details stay explicit."""
     distribution, version = _os_release()
-    memory, swap, disk = psutil.virtual_memory(), psutil.swap_memory(), psutil.disk_usage("/")
-    frequency = psutil.cpu_freq()
+    try:
+        memory = psutil.virtual_memory()
+    except (OSError, NotImplementedError):
+        memory = SimpleNamespace(total=0, used=0, percent=0.0)
+    try:
+        swap = psutil.swap_memory()
+    except (OSError, NotImplementedError):
+        swap = SimpleNamespace(total=0, used=0, percent=0.0)
+    root = Path.home().anchor or "/"
+    try:
+        disk = psutil.disk_usage(root)
+    except (OSError, NotImplementedError):
+        try:
+            disk = psutil.disk_usage(str(Path.home()))
+        except (OSError, NotImplementedError):
+            disk = SimpleNamespace(total=0, used=0, percent=0.0)
+    try:
+        frequency = psutil.cpu_freq()
+    except (OSError, AttributeError, NotImplementedError):
+        frequency = None
     gpu, gpu_driver = _gpu_details()
-    desktop = os.environ.get("XDG_CURRENT_DESKTOP") or os.environ.get("DESKTOP_SESSION") or "Unknown"
-    window_manager = "Hyprland" if os.environ.get("HYPRLAND_INSTANCE_SIGNATURE") else os.environ.get("XDG_SESSION_DESKTOP", "Unknown")
-    disk_parts = psutil.disk_partitions(all=False)
-    seen_devices = {part.device for part in disk_parts if part.mountpoint == "/"}
+    system = platform.system()
+    if os.environ.get("TERMUX_VERSION") or distribution.endswith("(Termux)"):
+        desktop, window_manager, display_server = "Termux", "Android", "Terminal"
+    elif system == "Windows":
+        desktop, window_manager, display_server = "Windows", "Desktop Window Manager", "Unknown"
+    elif system == "Darwin":
+        desktop, window_manager, display_server = "Aqua", "Quartz Compositor", "Quartz"
+    else:
+        desktop = os.environ.get("XDG_CURRENT_DESKTOP") or os.environ.get("DESKTOP_SESSION") or "Unknown"
+        window_manager = "Hyprland" if os.environ.get("HYPRLAND_INSTANCE_SIGNATURE") else os.environ.get("XDG_SESSION_DESKTOP", "Unknown")
+        display_server = os.environ.get("XDG_SESSION_TYPE", "Unknown").capitalize()
+    try:
+        disk_parts = psutil.disk_partitions(all=False)
+    except (OSError, NotImplementedError):
+        disk_parts = []
+    seen_devices = {part.device for part in disk_parts if os.path.normcase(part.mountpoint) == os.path.normcase(root)}
     extra_disks: list[DiskMount] = []
     for part in disk_parts:
         mountpoint = Path(part.mountpoint)
         if part.device in seen_devices or not mountpoint.is_dir():
             continue
-        if not any(str(mountpoint).startswith(prefix) for prefix in ("/run/media/", "/media/", "/mnt/")):
+        if system == "Windows":
+            include_mount = True
+        else:
+            include_mount = str(mountpoint).startswith(("/run/media/", "/media/", "/mnt/", "/Volumes/"))
+        if not include_mount:
             continue
         try:
             usage = psutil.disk_usage(str(mountpoint))
-        except OSError:
+        except (OSError, NotImplementedError):
             continue
         seen_devices.add(part.device)
         extra_disks.append(DiskMount(str(mountpoint), usage.total, usage.used, usage.percent))
+    try:
+        physical_cores = psutil.cpu_count(logical=False)
+        logical_threads = psutil.cpu_count(logical=True)
+    except (OSError, AttributeError, NotImplementedError):
+        physical_cores = logical_threads = os.cpu_count()
+    try:
+        boot_time = psutil.boot_time()
+        uptime = max(0, int(time.time() - boot_time))
+    except (OSError, AttributeError, NotImplementedError):
+        uptime = 0
+    try:
+        username = getpass.getuser()
+    except (KeyError, OSError):
+        username = "Unknown"
     return SystemInfo(
         distribution=distribution,
         os_version=version or "Unknown",
@@ -215,17 +315,17 @@ def collect_system_info() -> SystemInfo:
         kernel=platform.release(),
         architecture=platform.machine() or "Unknown",
         hostname=socket.gethostname(),
-        username=os.environ.get("USER") or "Unknown",
-        uptime_seconds=max(0, int(time.time() - psutil.boot_time())),
+        username=os.environ.get("USER") or os.environ.get("USERNAME") or username,
+        uptime_seconds=uptime,
         desktop=desktop,
         window_manager=window_manager,
-        display_server=os.environ.get("XDG_SESSION_TYPE", "Unknown").capitalize(),
-        shell=Path(os.environ.get("SHELL", "")).name or "Unknown",
-        terminal=os.environ.get("TERM_PROGRAM") or os.environ.get("TERM", "Unknown"),
+        display_server=display_server,
+        shell=Path(os.environ.get("SHELL") or os.environ.get("COMSPEC", "")).name or "Unknown",
+        terminal=os.environ.get("TERM_PROGRAM") or ("Windows Terminal" if os.environ.get("WT_SESSION") else os.environ.get("TERM", "Unknown")),
         resolution=_resolution(),
         cpu=_cpu_name(),
-        physical_cores=psutil.cpu_count(logical=False),
-        logical_threads=psutil.cpu_count(logical=True),
+        physical_cores=physical_cores,
+        logical_threads=logical_threads,
         cpu_frequency_mhz=frequency.current if frequency else None,
         gpu=gpu,
         gpu_driver=gpu_driver or "Unknown",
