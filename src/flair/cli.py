@@ -102,7 +102,7 @@ def _show_snapshot(
             return
         if info is None:
             if config["startup_status"] and not quiet_start and console.is_terminal:
-                with console.status("Reading system information…", spinner="dots", transient=True):
+                with console.status("Reading system information…", spinner="dots"):
                     info = collect_system_info()
             else:
                 info = collect_system_info()
