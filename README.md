@@ -4,6 +4,8 @@
 
 FLAIR is a configurable system summary and live monitor. Choose from default, detailed, classic, and minimal layouts, then adjust the modules, colors, artwork, and spacing to suit your terminal. Hardware values come from the running machine; unavailable fields are left unknown instead of guessed.
 
+FLAIR began as a personal project to provide its author with a system information summary tailored to their own machines and terminal preferences. It is inspired by the wider tradition of terminal-based system information tools, while its features and configuration are developed specifically for FLAIR.
+
 ## Platforms
 
 FLAIR is built with Python and psutil, so it runs on mainstream Linux distributions, Termux, Windows, and macOS. Linux distribution names are read from `os-release`; Termux is identified as an Android environment. Hardware and desktop details vary by platform: FLAIR uses native tools where available and does not require root or administrator access.
