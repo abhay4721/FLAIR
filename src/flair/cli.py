@@ -8,6 +8,7 @@ import shlex
 import shutil
 import subprocess
 import json
+import sys
 from dataclasses import asdict
 from pathlib import Path
 
@@ -24,6 +25,7 @@ from flair.monitor import run_live
 from flair.renderer import STYLE_MODULES, module_names, modules_for, render_showcase
 from flair.system import collect_system_info, format_bytes
 from flair.theme import list_themes, load_theme, save_theme_choice
+from flair.updater import UpdateError, check_and_update
 
 console = Console()
 app = typer.Typer(help="A fast system showcase and monitor for your terminal.", no_args_is_help=False, add_completion=False)
@@ -130,6 +132,7 @@ def _show_snapshot(
 def main(
     ctx: typer.Context,
     quiet_start: bool = typer.Option(False, "--quiet-start", help="Hide the brief startup status."),
+    no_update: bool = typer.Option(False, "--no-update", help="Skip the automatic update check for this run."),
     version: bool = typer.Option(False, "--version", help="Print the installed version and exit.", is_eager=True),
     config_file: Path | None = typer.Option(None, "--config", "-c", help="Read settings from this TOML file."),
     style: str | None = typer.Option(None, "--style", help="Layout preset: default, detailed, classic, or minimal."),
@@ -160,6 +163,14 @@ def main(
             if color not in {"auto", "always", "never"}:
                 console.print("[red]--color must be auto, always, or never[/]")
                 raise typer.Exit(code=2)
+        if not no_update:
+            update_config = _config(config_file)
+            if update_config["auto_update"]:
+                try:
+                    if check_and_update(Console(stderr=True)):
+                        os.execv(sys.executable, [sys.executable, "-m", "flair", *sys.argv[1:]])
+                except (OSError, UpdateError) as exc:
+                    Console(stderr=True).print(f"[yellow]Update check skipped:[/] {exc}")
         _show_snapshot(
             quiet_start=quiet_start,
             config_file=config_file,

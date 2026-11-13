@@ -19,7 +19,12 @@ No terminal application can guarantee every hardware field on every OS. Unsuppor
 
 ## Install
 
-Install Python 3.10 or newer, then run the commands for your platform from a FLAIR checkout.
+Install Python 3.10 or newer, clone the project, then run the commands for your platform. `pip install .` builds and installs FLAIR from the checkout.
+
+```sh
+git clone https://github.com/abhay4721/FLAIR.git
+cd FLAIR
+```
 
 ### Arch Linux
 
@@ -71,6 +76,7 @@ The editable install for development is `python -m pip install -e '.[dev]'`. To 
 ```text
 flair                         Show the system summary
 flair --quiet-start            Hide the brief startup status
+flair --no-update              Skip the automatic update check for this run
 flair --style detailed         Use the detailed module order
 flair --style classic          Use the classic module order
 flair --style minimal          Use the compact module order
@@ -128,6 +134,7 @@ FLAIR creates a per-user `config.toml` on first launch. It uses `$XDG_CONFIG_HOM
 ```toml
 theme = "arch-blue"
 style = "default"
+auto_update = true
 startup_status = true
 show_logo = true
 refresh_interval = 1.0
@@ -159,7 +166,7 @@ show_uptime = true
 
 Available modules are `title`, `separator`, `os`, `os_age`, `kernel`, `packages`, `host`, `uptime`, `shell`, `terminal`, `wm`, `de`, `display_server`, `architecture`, `cpu`, `cores`, `frequency`, `gpu`, `gpu_driver`, `screen`, `memory`, `swap`, `disk`, and `colors`. For example: `flair --style detailed --show architecture,terminal --hide colors`.
 
-Configuration can also control `startup_status`, refresh interval, terminal color mode, key width, key/value separator, logo visibility, built-in or custom artwork, logo padding, per-hardware display toggles, and an ordered module list. The `--config` option selects a separate TOML file, while `--show` and `--hide` make one-run adjustments.
+Configuration can also control `auto_update`, `startup_status`, refresh interval, terminal color mode, key width, key/value separator, logo visibility, built-in or custom artwork, logo padding, per-hardware display toggles, and an ordered module list. FLAIR checks the project’s main branch when its summary starts. If a newer revision is available, it builds and installs it, then restarts to display the summary using that revision. Git is needed for automatic updates. Set `auto_update = false` or pass `--no-update` to skip the check. The `--config` option selects a separate TOML file, while `--show` and `--hide` make one-run adjustments.
 
 Built-in themes are Arch Blue, Cyberpunk, Matrix, Dracula, Minimal Dark and Nord. To add a theme, create `themes/<name>.toml` inside the FLAIR config folder:
 

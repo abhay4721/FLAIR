@@ -16,6 +16,7 @@ except ModuleNotFoundError:  # Python 3.10
 DEFAULT_CONFIG: dict[str, Any] = {
     "theme": "arch-blue",
     "style": "default",
+    "auto_update": True,
     "startup_status": True,
     "show_logo": True,
     "refresh_interval": 1.0,
@@ -30,6 +31,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
 
 DEFAULT_TOML = '''theme = "arch-blue"
 style = "default"
+auto_update = true
 startup_status = true
 show_logo = true
 refresh_interval = 1.0
@@ -150,7 +152,7 @@ def load_config(path: Path | None = None) -> dict[str, Any]:
     }
     if not isinstance(modules, list) or any(not isinstance(module, str) or module not in allowed_modules for module in modules):
         raise ValueError("'modules' must be a list of supported module names")
-    for key in ("startup_status", "show_logo"):
+    for key in ("auto_update", "startup_status", "show_logo"):
         if not isinstance(values.get(key, DEFAULT_CONFIG[key]), bool):
             raise ValueError(f"'{key}' must be true or false")
     display = values.get("display", {})
