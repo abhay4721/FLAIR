@@ -71,7 +71,16 @@ source .venv/bin/activate
 python -m pip install .
 ```
 
-The editable install for development is `python -m pip install -e '.[dev]'`. To run without installing, use `python -m flair` from the project environment.
+The platform instructions above install FLAIR as a built package; they do not run it directly from the checkout. For development, `python -m pip install -e '.[dev]'` creates an editable install that follows source changes. To run without installing, use `python -m flair` from the project environment.
+
+### Build distributable packages
+
+```sh
+python -m pip install build
+python -m build
+```
+
+This creates a wheel and source archive in `dist/`. Install the wheel with `python -m pip install dist/flair_terminal-<version>-py3-none-any.whl` or `pipx install dist/flair_terminal-<version>-py3-none-any.whl`.
 
 ## Commands
 
