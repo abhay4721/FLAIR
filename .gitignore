@@ -5,4 +5,8 @@ __pycache__/
 .venv/
 build/
 dist/
+*.deb
+*.pkg.tar.zst
+packaging/arch/pkg/
+packaging/arch/src/
 

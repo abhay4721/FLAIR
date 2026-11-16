@@ -1,0 +1,23 @@
+pkgname=flair-terminal
+pkgver=0.1.0
+pkgrel=1
+pkgdesc='Configurable cross-platform system summary and live monitor'
+arch=('any')
+url='https://github.com/abhay4721/FLAIR'
+license=('MIT')
+depends=('python>=3.10' 'python-rich>=13.7' 'python-typer>=0.12' 'python-psutil>=5.9')
+makedepends=('python-build' 'python-hatchling' 'python-installer')
+source=()
+sha256sums=()
+
+build() {
+    python -m build --wheel --no-isolation --outdir "$srcdir/dist" "$startdir/../.."
+}
+
+package() {
+    python -m installer --no-compile-bytecode --destdir="$pkgdir" --prefix=/usr "$srcdir"/dist/*.whl
+    install -Dm644 "$startdir/../../LICENSE" "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+    install -Dm644 /dev/stdin "$pkgdir/usr/share/flair/package-managed" <<'EOF'
+Managed by the system package manager.
+EOF
+}

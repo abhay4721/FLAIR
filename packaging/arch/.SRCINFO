@@ -1,0 +1,16 @@
+pkgbase = flair-terminal
+	pkgdesc = Configurable cross-platform system summary and live monitor
+	pkgver = 0.1.0
+	pkgrel = 1
+	url = https://github.com/abhay4721/FLAIR
+	arch = any
+	license = MIT
+	makedepends = python-build
+	makedepends = python-hatchling
+	makedepends = python-installer
+	depends = python>=3.10
+	depends = python-rich>=13.7
+	depends = python-typer>=0.12
+	depends = python-psutil>=5.9
+
+pkgname = flair-terminal

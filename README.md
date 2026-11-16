@@ -19,6 +19,25 @@ FLAIR is built with Python and psutil, so it runs on mainstream Linux distributi
 
 No terminal application can guarantee every hardware field on every OS. Unsupported readings stay marked as unavailable instead of being guessed.
 
+## Native Linux packages
+
+On Debian or Ubuntu releases whose repositories provide the listed Python dependency versions, install the build tools and create a local `.deb` package:
+
+```sh
+sudo apt install dpkg-dev python3-build python3-hatchling
+./packaging/debian/build-deb.sh
+sudo apt install ./dist/flair-terminal_0.1.0_all.deb
+```
+
+On Arch Linux, create and install a pacman package from the checkout:
+
+```sh
+cd packaging/arch
+makepkg -si
+```
+
+Both packages declare their runtime dependencies and mark FLAIR as system-managed. Updates then come through `apt` or `pacman`; FLAIR's own updater stays out of the way.
+
 ## Install
 
 Install Python 3.10 or newer, clone the project, then run the commands for your platform. `pip install .` builds and installs FLAIR from the checkout.

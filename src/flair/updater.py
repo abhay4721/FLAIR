@@ -15,6 +15,7 @@ REPOSITORY = "https://github.com/abhay4721/FLAIR.git"
 BRANCH = "main"
 CHECKOUT = Path(__file__).resolve().parents[2]
 STATE_FILE = "update-state.json"
+PACKAGE_MANAGER_MARKER = Path("/usr/share/flair/package-managed")
 
 
 class UpdateError(RuntimeError):
@@ -98,6 +99,9 @@ def check_and_update(console: Console | None = None) -> bool:
     A local checkout is updated only when it is clean, on ``main``, and can be
     fast-forwarded. Installed copies use pip's Git support to build the wheel.
     """
+    # Native package managers own upgrades for system packages.
+    if PACKAGE_MANAGER_MARKER.is_file():
+        return False
     console = console or Console()
     state_path = _state_path()
     local_revision = _checkout_revision()
